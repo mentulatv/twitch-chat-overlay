@@ -1,0 +1,10 @@
+.env
+.tokens.json
+.tokens.tmp
+config.json
+cache/
+.venv/
+build/
+dist/
+__pycache__/
+*.spec

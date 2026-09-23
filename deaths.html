@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Death Counter</title>
+<!--
+  OBS browser source. Mods / broadcaster control it from Twitch chat:
+    !death  or  !d+        +1
+    !death- or  !d-        -1
+    !deaths set 12         set to a number
+    !deathreset            back to 0
+  URL params: ?channel=YOURNAME&label=DEATHS&key=default&size=48  (channel is required)
+  "key" keeps separate counts per game (e.g. key=whiteknuckle). Count is saved in the source's localStorage.
+-->
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  #box {
+    display: inline-flex; align-items: center; gap: .35em;
+    padding: .15em .5em; font: 800 var(--size, 48px) "Segoe UI", system-ui, sans-serif;
+    color: #fff; letter-spacing: .02em;
+    text-shadow: 0 0 3px #000, 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000,
+                 0 2px 0 #000, 0 -2px 0 #000, 2px 0 0 #000, -2px 0 0 #000;
+  }
+  #count { color: #ff4a4a; display: inline-block; min-width: 1ch; }
+  .pop { animation: pop .45s cubic-bezier(.2, 1.6, .4, 1); }
+  @keyframes pop { 0% { transform: scale(1.8); color: #fff; } 100% { transform: scale(1); } }
+</style>
+</head>
+<body>
+<div id="box"><span>💀</span><span id="label">DEATHS:</span><span id="count">0</span></div>
+<script>
+const params = new URLSearchParams(location.search);
+const channel = (params.get('channel') || '').toLowerCase().replace(/^#/, '');
+const storeKey = 'deaths:' + channel + ':' + (params.get('key') || 'default');
+document.getElementById('label').textContent = (params.get('label') || 'DEATHS') + ':';
+document.documentElement.style.setProperty('--size', (params.get('size') || 48) + 'px');
+const countEl = document.getElementById('count');
+
+let count = 0;
+try { count = parseInt(localStorage.getItem(storeKey), 10) || 0; } catch {}
+if (params.has('start')) count = parseInt(params.get('start'), 10) || 0;
+
+function show(animate) {
+  countEl.textContent = count;
+  try { localStorage.setItem(storeKey, String(count)); } catch {}
+  if (animate) { countEl.classList.remove('pop'); void countEl.offsetWidth; countEl.classList.add('pop'); }
+}
+show(false);
+
+function parseTags(raw) {
+  const tags = {};
+  for (const part of raw.split(';')) { const i = part.indexOf('='); tags[part.slice(0, i)] = part.slice(i + 1); }
+  return tags;
+}
+
+function handleLine(line) {
+  const m = line.match(/^@(\S+) :(\S+?)!\S+ PRIVMSG #\S+ :(.*)$/);
+  if (!m) return;
+  const tags = parseTags(m[1]);
+  const badges = tags.badges || '';
+  const allowed = tags.mod === '1' || /(^|,)broadcaster\//.test(badges);
+  if (!allowed) return;
+  const [cmd, arg, val] = m[3].trim().toLowerCase().split(/\s+/);
+  if (cmd === '!death' || cmd === '!d+') { count++; show(true); }
+  else if (cmd === '!death-' || cmd === '!d-') { count = Math.max(0, count - 1); show(true); }
+  else if (cmd === '!deathreset') { count = 0; show(true); }
+  else if (cmd === '!deaths' && arg === 'set' && /^\d+$/.test(val || '')) { count = parseInt(val, 10); show(true); }
+}
+
+function connect() {
+  const ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
+  ws.onopen = () => {
+    ws.send('CAP REQ :twitch.tv/tags');
+    ws.send('PASS SCHMOOPIIE');
+    ws.send('NICK justinfan' + Math.floor(10000 + Math.random() * 89999));
+    ws.send('JOIN #' + channel);
+  };
+  ws.onmessage = ev => {
+    for (const line of ev.data.split('\r\n')) {
+      if (line.startsWith('PING')) ws.send(line.replace('PING', 'PONG'));
+      else if (line) handleLine(line);
+    }
+  };
+  ws.onclose = () => setTimeout(connect, 3000);
+}
+if (channel) connect();
+else document.getElementById('box').innerHTML = '<span style="font-size:.4em">Set the browser source URL to deaths.html?channel=yourname</span>';
+</script>
+</body>
+</html>
