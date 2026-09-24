@@ -6,7 +6,6 @@ if not exist .venv\Scripts\python.exe call "%~dp0setup.bat"
 .venv\Scripts\python.exe -m PyInstaller --noconfirm --clean --windowed --onedir ^
   --name TwitchChatOverlay --icon NONE overlay.py || (pause & exit /b 1)
 set OUT=dist\TwitchChatOverlay
-copy /y deaths.html "%OUT%\" >nul
 copy /y README.md "%OUT%\" >nul
 copy /y .env.example "%OUT%\.env" >nul
 (echo @echo off& echo start "" "%%~dp0TwitchChatOverlay.exe" login) > "%OUT%\Login to Twitch.bat"

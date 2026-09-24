@@ -9,7 +9,6 @@ A small, see-through Twitch chat window that sits **on top of your games** witho
 - Quiet **alerts** for follows, subs, gift subs, raids, bits and channel points: one colored line and a soft chime
 - Messages that mods delete, or from users they ban or time out, disappear from the overlay too
 - Hides `!commands` and common bots (Nightbot, StreamElements, …)
-- Bonus: an OBS **death counter** your mods control from chat
 
 Windows 10/11 only.
 
@@ -39,7 +38,7 @@ Your game must run in **Borderless** or **Windowed fullscreen**. No overlay can 
 
 Edit mode also shows the connection status: chat, emotes and alerts.
 
-<img src="docs/edit-mode.png" alt="Edit mode with a border, resize grip and status lines" width="420">
+<img src="docs/edit-mode.jpg" alt="Edit mode with a border, resize grip and status lines, over a game" width="640">
 
 ## Settings
 
@@ -86,25 +85,6 @@ A window shows a short code and opens Twitch. Log in as the channel owner (or on
 
 To use your own Twitch app instead of the built-in one, put its Client ID in `.env` and log in again.
 
-## Death counter for OBS (optional)
-
-<img src="docs/death-counter.png" alt="Death counter showing DEATHS: 46" width="480">
-
-1. In OBS: **+ → Browser**, and untick "Local file".
-2. URL: `http://absolute/C:/path/to/deaths.html?channel=yourname`. Use the real path to the file, with forward slashes.
-3. Width 520, height 110.
-
-Only mods and the broadcaster can change it:
-
-| Chat command | Effect |
-|---|---|
-| `!death` or `!d+` | +1 |
-| `!death-` or `!d-` | −1 |
-| `!deaths set 12` | Set to a number |
-| `!deathreset` | Back to 0 |
-
-Extra URL options: `&label=FAILS` changes the text, `&size=36` changes the size, and `&key=eldenring` keeps a separate count per game. The count survives OBS restarts.
-
 ## Start automatically with Windows
 
 Press **Win+R**, type `shell:startup`, and put a shortcut to `TwitchChatOverlay.exe` in that folder (or to `start.bat` in the source version).
@@ -122,9 +102,9 @@ login.bat      # Twitch login for follow alerts
 build.bat      # build the .exe + zip into dist\
 ```
 
-Files: `overlay.py` (window, chat, emotes), `alerts.py` (alerts, Twitch login, chime), `settings.py` (file locations, `.env`), `deaths.html` (OBS counter), `demo.py` (scripted chat for screenshots: `python overlay.py --demo`, add `--edit` or `--alerts`).
+Files: `overlay.py` (window, chat, emotes), `alerts.py` (alerts, Twitch login, chime), `settings.py` (file locations, `.env`), `demo.py` (scripted chat for screenshots: `python overlay.py --demo`, add `--edit` or `--alerts`).
 
-The screenshots use made-up usernames. The game in the background is *White Knuckle*.
+The screenshots use made-up usernames. Games in the background: *Dying Light 2* and *Deadlock*.
 
 ## Troubleshooting
 

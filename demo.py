@@ -19,7 +19,7 @@ SCRIPT = [
     (0.3, "chat", ("MossyBoots", "#DAA520", "LUL LUL")),
     (0.3, "alert", {"kind": "sub", "text": "MossyBoots subscribed at Tier 1. They've subscribed for 6 months!",
                     "message": "half a year already peepoHappy"}),
-    (0.3, "chat", ("ferret_fan", "#00FF7F", "how many deaths are we at now")),
+    (0.3, "chat", ("ferret_fan", "#00FF7F", "what rank are you now")),
     (0.3, "chat", ("PixelPanda", "#1E90FF", "dont ask Kappa")),
     (0.3, "alert", {"kind": "raid", "text": "14 raiders from SnowyStreams have joined!", "message": ""}),
     (0.3, "chat", ("SnowyStreams", "#8A2BE2", "hiii everyone AlienDance PepePls")),
