@@ -5,7 +5,8 @@ A small, see-through Twitch chat window that sits **on top of your games** witho
 ![Chat overlay on top of a game, with emotes and alerts](docs/overlay.jpg)
 
 - Chat with name colors and a black outline, so it stays readable on any background
-- **Twitch, 7TV, BTTV and FrankerFaceZ emotes**, including animated ones
+- **Twitch, 7TV, BTTV and FrankerFaceZ emotes**, including animated ones, plus color emoji
+- Highlights **first-time chatters** (a NEW label) and **messages that mention you** (a tinted box), and shows mod **announcements**
 - Quiet **alerts** for follows, subs, gift subs, raids, bits and channel points: one colored line and a soft chime
 - Messages that mods delete, or from users they ban or time out, disappear from the overlay too
 - Hides `!commands` and common bots (Nightbot, StreamElements, …)
@@ -67,6 +68,10 @@ This file is created on first run. It's also where the overlay saves its positio
 | `show_badges` | true | ★ broadcaster, ⚔ mod, ♦ VIP in front of names |
 | `emotes` | true | Show emotes as images |
 | `emote_providers` | all true | Turn single emote services on or off: `7tv`, `bttv`, `ffz` |
+| `emoji` | true | Color emoji (false = plain white ones) |
+| `highlight_first_messages` | true | NEW label on someone's first message in your channel |
+| `highlight_mentions` | true | Tinted box behind messages that contain your channel name |
+| `mention_words` | [] | Extra words that count as a mention, for example `["dan", "danny"]` |
 | `emote_height` | 0 | Emote size in pixels (0 = match the text) |
 | `alerts` | true | Turn all alerts on or off |
 | `alert_types` | all true | Turn single types on or off: `follow`, `sub`, `gift`, `raid`, `bits`, `redeem` |

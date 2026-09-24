@@ -33,6 +33,7 @@ import time
 import tkinter as tk
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from ctypes import wintypes
 from pathlib import Path
 from tkinter import font as tkfont
@@ -60,6 +61,10 @@ DEFAULTS = {
     "hide_users": ["nightbot", "streamelements", "streamlabs", "moobot", "fossabot"],
     "emotes": True,
     "emote_providers": {"7tv": True, "bttv": True, "ffz": True},
+    "emoji": True,             # draw emoji in color (off = plain white emoji)
+    "highlight_first_messages": True,  # mark someone's first ever message in the channel
+    "highlight_mentions": True,        # box messages that mention the channel name
+    "mention_words": [],               # extra words that count as a mention, e.g. a nickname
     "emote_height": 0,         # px; 0 = scale with font size
     "emote_refresh_minutes": 15,
     "alerts": True,
@@ -73,6 +78,15 @@ RUNTIME_KEYS = {"channel", "_demo"}  # lives in .env, never written to config.js
 
 KEY_COLOR = "#010101"  # rendered fully transparent; near-black so text edges blend into a dark outline
 EDIT_BG = "#1b1b24"
+MENTION_BG = "#3a2352"
+FIRST_MSG_COLOR = "#5ce1c6"
+ANNOUNCE_COLORS = {"PRIMARY": "#bf94ff", "BLUE": "#5cb8ff", "GREEN": "#4fe0a0",
+                   "ORANGE": "#ffb347", "PURPLE": "#c38bff"}
+# one emoji: optional variation selector / skin tone, optionally joined (ZWJ) to more; or a flag pair
+EMOJI_RE = re.compile(
+    "[\U0001F1E6-\U0001F1FF]{2}"
+    "|[\u2300-\u23FF\u2600-\u27BF\u2B00-\u2BFF\U0001F000-\U0001FAFF][\uFE0F\U0001F3FB-\U0001F3FF]*"
+    "(?:\u200D[\u2600-\u27BF\U0001F000-\U0001FAFF][\uFE0F\U0001F3FB-\U0001F3FF]*)*")
 TWITCH_DEFAULT_COLORS = [
     "#FF0000", "#0000FF", "#00FF00", "#B22222", "#FF7F50", "#9ACD32", "#FF4500",
     "#2E8B57", "#DAA520", "#D2691E", "#5F9EA0", "#1E90FF", "#FF69B4", "#8A2BE2", "#00FF7F",
@@ -288,6 +302,52 @@ def load_emote_frames(spec: dict, height: int):
     return frames, durations
 
 
+@lru_cache(maxsize=1)
+def emoji_font():
+    from PIL import ImageFont
+    try:
+        return ImageFont.truetype("seguiemj.ttf", 64)  # Segoe UI Emoji, ships with Windows 10/11
+    except OSError:
+        return None
+
+
+def render_emoji(ch: str, height: int):
+    """Color emoji as an RGBA image, or None (then Tk draws it as plain white text)."""
+    from PIL import ImageDraw
+    font = emoji_font()
+    if font is None:
+        return None
+    im = Image.new("RGBA", (160, 110))
+    ImageDraw.Draw(im).text((8, 8), ch, font=font, embedded_color=True)
+    box = im.getbbox()
+    if not box:
+        return None
+    im = im.crop(box)
+    im = im.resize((max(1, round(im.width * height / im.height)), height), Image.LANCZOS)
+    padded = Image.new("RGBA", (im.width + 4, height))  # tight crop would touch neighbouring words
+    padded.paste(im, (2, 0))
+    return padded
+
+
+def split_emoji(word: str):
+    """'lol😂😂' -> ['lol', <emoji spec>, <emoji spec>]. Joined emoji and flags stay text:
+    Pillow can't shape those here, but Tk draws them fine in white."""
+    parts, pos = [], 0
+    for m in EMOJI_RE.finditer(word):
+        cluster = m.group()
+        if "\u200d" in cluster or "\U0001F1E6" <= cluster[0] <= "\U0001F1FF":
+            continue
+        if m.start() > pos:
+            parts.append(word[pos:m.start()])
+        base = "".join(c for c in cluster if c != "\ufe0f" and not "\U0001F3FB" <= c <= "\U0001F3FF")
+        parts.append({"key": "emoji_" + "-".join(f"{ord(c):x}" for c in base), "emoji": base,
+                      "name": cluster, "zero_width": False})
+        pos = m.end()
+    if pos < len(word):
+        parts.append(word[pos:])
+    return parts
+
+
 # --- Overlay -------------------------------------------------------------
 
 def readable(color: str) -> str:
@@ -298,11 +358,6 @@ def readable(color: str) -> str:
         f = 0.55
         r, g, b = (int(c + (255 - c) * f) for c in (r, g, b))
     return f"#{r:02x}{g:02x}{b:02x}"
-
-
-def safe_text(s: str) -> str:
-    # Tk 8.6 cannot always render characters outside the BMP (most emoji)
-    return "".join(c if ord(c) <= 0xFFFF else "□" for c in s)
 
 
 class Overlay:
@@ -340,6 +395,7 @@ class Overlay:
         self.text_h = self.font.metrics("linespace")
         self.space_w = self.font.measure(" ")
         self.emote_h = cfg["emote_height"] or round(self.text_h * 1.3)
+        self.emoji_h = round(self.text_h * 0.95)
         self.canvas = tk.Canvas(self.root, bg=KEY_COLOR, highlightthickness=0, bd=0)
         self.canvas.pack(fill="both", expand=True)
         self.canvas.bind("<Configure>", lambda e: self.render())
@@ -398,7 +454,9 @@ class Overlay:
                     else:
                         changed |= self.add_chat(data)
                 elif kind == "usernotice":
-                    if self.cfg["alerts"]:
+                    if data["tags"].get("msg-id") == "announcement":  # /announce by a mod: a normal message
+                        changed |= self.add_chat(data, announce=data["tags"].get("msg-param-color", "PRIMARY"))
+                    elif self.cfg["alerts"]:
                         changed |= self.add_alert(self.irc_alerts.from_usernotice(data), data)
                 elif kind == "alert":
                     changed |= self.add_alert(data)
@@ -425,7 +483,7 @@ class Overlay:
                     key, frames, durs = data
                     self.emote_pending.discard(key)
                     self.emote_images[key] = {"frames": [ImageTk.PhotoImage(f) for f in frames], "durs": durs,
-                                              "total": sum(durs), "w": frames[0].width}
+                                              "total": sum(durs), "w": frames[0].width, "h": frames[0].height}
                     changed = True
                 elif kind == "emote_fail":
                     self.emote_pending.discard(data)
@@ -453,6 +511,14 @@ class Overlay:
         key = spec["key"]
         if key in self.emote_images or key in self.emote_pending or key in self.emote_failed:
             return
+        if "emoji" in spec:  # drawn locally from the Windows emoji font: instant, no download
+            img = render_emoji(spec["emoji"], self.emoji_h)
+            if img is None:
+                self.emote_failed.add(key)
+            else:
+                self.emote_images[key] = {"frames": [ImageTk.PhotoImage(img)], "durs": [100], "total": 100,
+                                          "w": img.width, "h": img.height}
+            return
         self.emote_pending.add(key)
 
         def work():
@@ -463,9 +529,9 @@ class Overlay:
                 self.events.put(("emote_fail", key))
         self.pool.submit(work)
 
-    def add_chat(self, msg) -> bool:
+    def add_chat(self, msg, announce=None) -> bool:
         tags = msg["tags"]
-        login = msg["prefix"].split("!", 1)[0]
+        login = tags.get("login") or msg["prefix"].split("!", 1)[0]  # USERNOTICE has no user prefix
         text = msg["trailing"] or ""
         if login.lower() in {u.lower() for u in self.cfg["hide_users"]}:
             return False
@@ -490,9 +556,20 @@ class Overlay:
             "color": readable(color), "text": text, "action": action, "time": time.time(),
             "twitch_emotes": self.parse_twitch_emotes(tags.get("emotes", ""), len(text)),
             "tokens": None, "tokens_ver": -1,
+            "first": self.cfg["highlight_first_messages"] and tags.get("first-msg") == "1",
+            "mention": self.cfg["highlight_mentions"] and self.is_mention(login, text),
+            "accent": ANNOUNCE_COLORS.get(announce, ANNOUNCE_COLORS["PRIMARY"]) if announce else
+                      (FIRST_MSG_COLOR if self.cfg["highlight_first_messages"] and tags.get("first-msg") == "1" else None),
         })
         del self.messages[:-self.cfg["max_messages"]]
         return True
+
+    def is_mention(self, login, text) -> bool:
+        channel = self.cfg["channel"].lower()
+        if login.lower() == channel:  # your own messages
+            return False
+        triggers = {channel} | {w.lower().lstrip("@") for w in self.cfg["mention_words"]}
+        return any(w in triggers for w in re.findall(r"\w+", text.lower()))
 
     @staticmethod
     def parse_twitch_emotes(tag: str, text_len: int):
@@ -515,7 +592,7 @@ class Overlay:
         self.messages.append({
             "id": irc_msg["tags"].get("id") if irc_msg else None, "login": "", "name": "",
             "color": color, "text": text, "action": False, "time": time.time(),
-            "alert": f"{icon} {alert['text']}", "ttl": self.cfg["alert_fade_seconds"],
+            "alert": f"{icon} {alert['text']}", "ttl": self.cfg["alert_fade_seconds"], "accent": color,
             "twitch_emotes": self.parse_twitch_emotes(emote_tag, len(text)) if emote_tag else [],
             "tokens": None, "tokens_ver": -1,
         })
@@ -599,6 +676,9 @@ class Overlay:
             tokens = [("text", w, m["color"], i > 0) for i, w in enumerate(m["alert"].split())]
         else:
             tokens = [("text", m["name"] + ("" if m["action"] else ":"), m["color"], False)]
+            if m.get("first"):
+                tokens.insert(0, ("text", "NEW", FIRST_MSG_COLOR, False))
+                tokens[1] = tokens[1][:3] + (True,)
         text = m["text"]
         segments, pos = [], 0   # split text around Twitch-native emote ranges
         for a, b, eid in m["twitch_emotes"]:
@@ -618,6 +698,10 @@ class Overlay:
                 spec = self.third_party.get(word) if self.cfg["emotes"] else None
                 if spec:
                     tokens.append(("emote", spec, True))
+                elif self.cfg["emoji"] and EMOJI_RE.search(word):
+                    for i, part in enumerate(split_emoji(word)):
+                        tokens.append(("emote", part, i == 0) if isinstance(part, dict)
+                                      else ("text", part, body_color, i == 0))
                 else:
                     tokens.append(("text", word, body_color, True))
         m["tokens"], m["tokens_ver"] = tokens, self.emote_version
@@ -637,9 +721,10 @@ class Overlay:
         for tok in self.tokenize(m):
             if tok[0] == "emote":
                 spec = tok[1]
-                img = self.emote_images.get(spec["key"]) if self.cfg["emotes"] else None
-                if img is None and self.cfg["emotes"]:
+                img = self.emote_images.get(spec["key"]) if self.cfg["emotes"] or "emoji" in spec else None
+                if img is None and (self.cfg["emotes"] or "emoji" in spec):
                     self.request_emote(spec)
+                    img = self.emote_images.get(spec["key"])  # emoji render instantly
                 if img is not None:
                     if spec["zero_width"] and prev_emote is not None and prev_emote in cur:
                         cur.append({"t": "emote", "key": spec["key"], "img": img,
@@ -655,10 +740,9 @@ class Overlay:
                     x += sp + img["w"]
                     continue
                 # not loaded (yet) or failed: fall back to its name as text
-                tok = ("text", spec_name(tok[1], m), "#bbbbbb", tok[2])
+                tok = ("text", spec_name(tok[1], m), "#ffffff" if "emoji" in spec else "#bbbbbb", tok[2])
             _, word, color, space_before = tok
             prev_emote = None
-            word = safe_text(word)
             while word:
                 sp = self.space_w if space_before and x else 0
                 w = self.font.measure(word)
@@ -680,7 +764,7 @@ class Overlay:
         newline()
         out, total = [], 0
         for line in lines:
-            lh = max([self.text_h] + [self.emote_h for a in line if a["t"] == "emote"])
+            lh = max([self.text_h] + [a["img"]["h"] for a in line if a["t"] == "emote"])
             out.append((lh, line))
             total += lh
         return out, total
@@ -753,9 +837,11 @@ class Overlay:
             y -= mh
             if y < top_limit:
                 break
+            if m.get("mention"):
+                c.create_rectangle(pad - 4, y - 2, w - 2, y + mh + 2, fill=MENTION_BG, outline="")
             self.draw_message(lines, y, pad)
-            if m.get("alert"):
-                c.create_rectangle(1, y + 2, 4, y + mh - 2, fill=m["color"], outline="#000000")
+            if m.get("accent"):
+                c.create_rectangle(1, y + 2, 4, y + mh - 2, fill=m["accent"], outline="#000000")
             y -= self.cfg["message_gap"]
 
     def animate(self):
@@ -906,7 +992,7 @@ def main():
         return
     if "--demo" in args:  # README screenshots: scripted chat, runs alongside a real copy
         cfg = load_config()
-        cfg.update(channel="demo", alert_sound=False, _demo="alerts" if "--alerts" in args else "chat")
+        cfg.update(channel="yourchannel", alert_sound=False, _demo="alerts" if "--alerts" in args else "chat")
         if "--geometry" in args:  # WxH+X+Y
             w, h, x, y = map(int, re.match(r"(\d+)x(\d+)\+(-?\d+)\+(-?\d+)", args[args.index("--geometry") + 1]).groups())
             cfg.update(width=w, height=h, x=x, y=y)
