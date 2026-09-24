@@ -68,7 +68,7 @@ DEFAULTS = {
     "alert_sound_file": "",    # optional .wav to use instead of the built-in chime
     "alert_fade_seconds": 180, # alerts linger longer than chat; 0 = never
 }
-RUNTIME_KEYS = {"channel"}  # lives in .env, never written to config.json
+RUNTIME_KEYS = {"channel", "_demo"}  # lives in .env, never written to config.json
 
 KEY_COLOR = "#010101"  # rendered fully transparent; near-black so text edges blend into a dark outline
 EDIT_BG = "#1b1b24"
@@ -333,9 +333,14 @@ class Overlay:
         self.apply_click_through(True)
 
         threading.Thread(target=hotkey_thread, args=(self.events,), daemon=True).start()
-        threading.Thread(target=irc_thread, args=(cfg["channel"], self.events), daemon=True).start()
-        if cfg["alerts"]:
-            threading.Thread(target=alerts.eventsub_thread, args=(cfg, self.events), daemon=True).start()
+        if cfg.get("_demo"):
+            import demo
+            threading.Thread(target=demo.demo_thread, args=(self.events, cfg["_demo"] == "alerts"),
+                             daemon=True).start()
+        else:
+            threading.Thread(target=irc_thread, args=(cfg["channel"], self.events), daemon=True).start()
+            if cfg["alerts"]:
+                threading.Thread(target=alerts.eventsub_thread, args=(cfg, self.events), daemon=True).start()
 
         self.root.after(50, self.pump)
         self.root.after(2000, self.keep_on_top)
@@ -778,6 +783,8 @@ class Overlay:
         self.drag = None
 
     def save_geometry(self):
+        if self.cfg.get("_demo"):
+            return
         self.cfg.update(x=self.root.winfo_x(), y=self.root.winfo_y(),
                         width=self.root.winfo_width(), height=self.root.winfo_height())
         save_config(self.cfg)
@@ -875,6 +882,17 @@ def main():
     set_dpi_aware()
     if args[:1] == ["login"]:
         alerts.login_window()
+        return
+    if "--demo" in args:  # README screenshots: scripted chat, runs alongside a real copy
+        cfg = load_config()
+        cfg.update(channel="demo", alert_sound=False, _demo="alerts" if "--alerts" in args else "chat")
+        if "--geometry" in args:  # WxH+X+Y
+            w, h, x, y = map(int, re.match(r"(\d+)x(\d+)\+(-?\d+)\+(-?\d+)", args[args.index("--geometry") + 1]).groups())
+            cfg.update(width=w, height=h, x=x, y=y)
+        overlay = Overlay(cfg)
+        if "--edit" in args:
+            overlay.root.after(3500, lambda: overlay.handle_hotkey(HK_EDIT))
+        overlay.run()
         return
     if already_running():
         return

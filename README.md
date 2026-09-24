@@ -2,6 +2,8 @@
 
 A small, see-through Twitch chat window that sits **on top of your games** without getting in the way. Clicks go straight through it to the game. It's meant for streamers who want to read chat without alt-tabbing.
 
+![Chat overlay on top of a game, with emotes and alerts](docs/overlay.jpg)
+
 - Chat with name colors and a black outline, so it stays readable on any background
 - **Twitch, 7TV and BTTV emotes**, including animated ones
 - Quiet **alerts** for follows, subs, gift subs, raids, bits and channel points: one colored line and a soft chime
@@ -16,7 +18,8 @@ Windows 10/11 only.
 ## Quick start (.exe version)
 
 1. Download **`TwitchChatOverlay-win64.zip`** from the [latest release](https://github.com/mentulatv/twitch-chat-overlay/releases/latest) and unzip it anywhere, for example `Documents\TwitchChatOverlay`.
-2. Double-click **`TwitchChatOverlay.exe`**. The first time, it asks for your channel name.
+2. Double-click **`TwitchChatOverlay.exe`**. The first time, it asks for your channel name.<br>
+   <img src="docs/first-run.png" alt="First-run window asking for the channel name" width="470">
 3. Chat appears on the left side of your screen. Press **Ctrl+Shift+F9** to move or resize it, then press it again to lock it in place.
 
 > Windows may show "Windows protected your PC", because the program isn't code-signed.
@@ -35,6 +38,8 @@ Your game must run in **Borderless** or **Windowed fullscreen**. No overlay can 
 | Ctrl+Shift+F12 | Quit |
 
 Edit mode also shows the connection status: chat, emotes and alerts.
+
+<img src="docs/edit-mode.png" alt="Edit mode with a border, resize grip and status lines" width="420">
 
 ## Settings
 
@@ -70,6 +75,8 @@ This file is created on first run. It's also where the overlay saves its positio
 
 ## Follow & channel-point alerts
 
+<img src="docs/alerts.png" alt="The six alert types: follow, sub, gift, raid, bits, channel points" width="600">
+
 Subs, gift subs, raids and bits work straight away. **Follows and channel-point redemptions** need a one-time Twitch login:
 
 - On first launch, leave the **"Also show follows & channel-point redeems"** box ticked, **or**
@@ -80,6 +87,8 @@ A window shows a short code and opens Twitch. Log in as the channel owner (or on
 To use your own Twitch app instead of the built-in one, put its Client ID in `.env` and log in again.
 
 ## Death counter for OBS (optional)
+
+<img src="docs/death-counter.png" alt="Death counter showing DEATHS: 46" width="480">
 
 1. In OBS: **+ → Browser**, and untick "Local file".
 2. URL: `http://absolute/C:/path/to/deaths.html?channel=yourname`. Use the real path to the file, with forward slashes.
@@ -113,7 +122,9 @@ login.bat      # Twitch login for follow alerts
 build.bat      # build the .exe + zip into dist\
 ```
 
-Files: `overlay.py` (window, chat, emotes), `alerts.py` (alerts, Twitch login, chime), `settings.py` (file locations, `.env`), `deaths.html` (OBS counter).
+Files: `overlay.py` (window, chat, emotes), `alerts.py` (alerts, Twitch login, chime), `settings.py` (file locations, `.env`), `deaths.html` (OBS counter), `demo.py` (scripted chat for screenshots: `python overlay.py --demo`, add `--edit` or `--alerts`).
+
+The screenshots use made-up usernames. The game in the background is *White Knuckle*.
 
 ## Troubleshooting
 
