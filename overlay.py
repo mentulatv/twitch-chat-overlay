@@ -59,6 +59,7 @@ DEFAULTS = {
     "hide_commands": True,     # skip messages starting with "!"
     "hide_users": ["nightbot", "streamelements", "streamlabs", "moobot", "fossabot"],
     "emotes": True,
+    "emote_providers": {"7tv": True, "bttv": True, "ffz": True},
     "emote_height": 0,         # px; 0 = scale with font size
     "emote_refresh_minutes": 15,
     "alerts": True,
@@ -217,9 +218,19 @@ def http_json(url: str):
         return None
 
 
-def fetch_third_party_sets(room_id: str) -> dict:
-    """name -> spec. Priority (highest last wins): BTTV global, 7TV global, BTTV channel, 7TV channel."""
+def fetch_third_party_sets(room_id: str, providers: dict) -> dict:
+    """name -> spec. When names clash, channel beats global and 7TV > BTTV > FFZ (later add_* wins)."""
     named = {}
+
+    def add_ffz(sets):
+        for s in (sets or {}).values():
+            for e in s.get("emoticons") or []:
+                if e.get("modifier"):  # ffzW / ffzCursed etc. transform other emotes; not drawable alone
+                    continue
+                urls = e.get("animated") or e.get("urls") or {}  # animated = webp, urls = static png
+                url = urls.get("2") or urls.get("1")
+                if url:
+                    named[e["name"]] = {"name": e["name"], "key": f"ffz_{e['id']}", "url": url, "zero_width": False}
 
     def add_bttv(emotes):
         for e in emotes or []:
@@ -235,12 +246,22 @@ def fetch_third_party_sets(room_id: str) -> dict:
             named[e["name"]] = {"name": e["name"], "key": f"7tv_{e['id']}", "url": f"https:{base}/2x.webp",
                                 "zero_width": bool(e.get("flags", 0) & 1)}
 
-    add_bttv(http_json("https://api.betterttv.net/3/cached/emotes/global"))
-    add_7tv((http_json("https://7tv.io/v3/emote-sets/global") or {}).get("emotes"))
-    bttv = http_json(f"https://api.betterttv.net/3/cached/users/twitch/{room_id}") or {}
-    add_bttv((bttv.get("sharedEmotes") or []) + (bttv.get("channelEmotes") or []))
-    seventv = http_json(f"https://7tv.io/v3/users/twitch/{room_id}") or {}
-    add_7tv((seventv.get("emote_set") or {}).get("emotes"))
+    ffz_on, bttv_on, seventv_on = (providers.get(k, True) for k in ("ffz", "bttv", "7tv"))
+    if ffz_on:
+        g = http_json("https://api.frankerfacez.com/v1/set/global") or {}
+        add_ffz({str(i): g["sets"][str(i)] for i in g.get("default_sets", []) if str(i) in g.get("sets", {})})
+    if bttv_on:
+        add_bttv(http_json("https://api.betterttv.net/3/cached/emotes/global"))
+    if seventv_on:
+        add_7tv((http_json("https://7tv.io/v3/emote-sets/global") or {}).get("emotes"))
+    if ffz_on:
+        add_ffz((http_json(f"https://api.frankerfacez.com/v1/room/id/{room_id}") or {}).get("sets"))
+    if bttv_on:
+        bttv = http_json(f"https://api.betterttv.net/3/cached/users/twitch/{room_id}") or {}
+        add_bttv((bttv.get("sharedEmotes") or []) + (bttv.get("channelEmotes") or []))
+    if seventv_on:
+        seventv = http_json(f"https://7tv.io/v3/users/twitch/{room_id}") or {}
+        add_7tv((seventv.get("emote_set") or {}).get("emotes"))
     return named
 
 
@@ -420,7 +441,7 @@ class Overlay:
 
         def work():
             try:
-                self.events.put(("emote_sets", fetch_third_party_sets(room)))
+                self.events.put(("emote_sets", fetch_third_party_sets(room, self.cfg["emote_providers"])))
             except Exception as e:
                 self.events.put(("status", f"emote list fetch failed: {e}"))
         self.pool.submit(work)
@@ -718,7 +739,7 @@ class Overlay:
             c.create_rectangle(1, 1, w - 2, h - 2, outline="#9146FF", width=2)
             for i in range(3):  # resize grip
                 c.create_line(w - 6 - i * 6, h - 4, w - 4, h - 6 - i * 6, fill="#9146FF", width=2)
-            emote_info = f"{len(self.third_party)} 7TV/BTTV emotes loaded" if self.third_party else "emotes: loading..."
+            emote_info = f"{len(self.third_party)} 7TV/BTTV/FFZ emotes loaded" if self.third_party else "emotes: loading..."
             self.outlined_text(pad, pad, f"EDIT MODE — #{self.cfg['channel']}\n"
                                "drag to move · drag corner to resize\n"
                                "Ctrl+Shift+F9 to lock · F8 test alert · F12 quits\n" + self.status_text + "\n"

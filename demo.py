@@ -54,7 +54,7 @@ def fake_privmsg(name, color, text):
 def demo_thread(events, only_alerts=False):
     events.put(("status", "demo mode (no Twitch connection)"))
     events.put(("alert_status", "alerts: scripted demo"))
-    events.put(("room", "0"))  # no such channel: loads the global 7TV/BTTV emote sets only
+    events.put(("room", "0"))  # no such channel: loads the global 7TV/BTTV/FFZ emote sets only
     time.sleep(2.5)            # let the emote lists arrive before the first message
     if only_alerts:
         for a in ALL_ALERTS:

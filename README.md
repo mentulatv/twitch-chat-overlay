@@ -5,7 +5,7 @@ A small, see-through Twitch chat window that sits **on top of your games** witho
 ![Chat overlay on top of a game, with emotes and alerts](docs/overlay.jpg)
 
 - Chat with name colors and a black outline, so it stays readable on any background
-- **Twitch, 7TV and BTTV emotes**, including animated ones
+- **Twitch, 7TV, BTTV and FrankerFaceZ emotes**, including animated ones
 - Quiet **alerts** for follows, subs, gift subs, raids, bits and channel points: one colored line and a soft chime
 - Messages that mods delete, or from users they ban or time out, disappear from the overlay too
 - Hides `!commands` and common bots (Nightbot, StreamElements, …)
@@ -66,6 +66,7 @@ This file is created on first run. It's also where the overlay saves its positio
 | `hide_users` | bots | Usernames to never show |
 | `show_badges` | true | ★ broadcaster, ⚔ mod, ♦ VIP in front of names |
 | `emotes` | true | Show emotes as images |
+| `emote_providers` | all true | Turn single emote services on or off: `7tv`, `bttv`, `ffz` |
 | `emote_height` | 0 | Emote size in pixels (0 = match the text) |
 | `alerts` | true | Turn all alerts on or off |
 | `alert_types` | all true | Turn single types on or off: `follow`, `sub`, `gift`, `raid`, `bits`, `redeem` |
